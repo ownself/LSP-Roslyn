@@ -1,0 +1,38 @@
+LSP-Roslyn
+==========
+
+Thank you for installing LSP-Roslyn!
+
+This package provides C# language support using the modern Roslyn Language Server,
+the same server used by Visual Studio Code's C# Dev Kit.
+
+Requirements:
+-------------
+1. Sublime Text 4 (Build 4075+)
+2. LSP package (install via Package Control)
+3. .NET SDK 8.0 or higher (https://dotnet.microsoft.com/download)
+
+Getting Started:
+----------------
+1. Ensure .NET SDK is installed and in your PATH
+2. Open any C# (.cs) file
+3. The Roslyn language server will be automatically downloaded on first use
+4. Configure settings via: Preferences → Package Settings → LSP → Servers → LSP-Roslyn
+
+Configuration:
+--------------
+Access settings via Command Palette → "Preferences: LSP-Roslyn Settings"
+
+Key settings:
+- roslyn.defaultLaunchSolution: Specify default solution file
+- roslyn.backgroundAnalysis: Control diagnostics scope
+- roslyn.inlayHints: Enable inline type and parameter hints
+- roslyn.codeLens: Show references and test indicators
+
+For more information:
+---------------------
+- Documentation: https://github.com/yourusername/LSP-Roslyn
+- Report issues: https://github.com/yourusername/LSP-Roslyn/issues
+- LSP package: https://packagecontrol.io/packages/LSP
+
+Enjoy coding in C# with Sublime Text!

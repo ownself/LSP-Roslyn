@@ -166,84 +166,123 @@ class Roslyn(AbstractPlugin):
 
     @classmethod
     def install_or_update(cls) -> None:
-        """Download and install the Roslyn language server using dotnet tool."""
+        """Download and install the Roslyn language server from GitHub releases."""
+        import json
+        import zipfile
+        import io
+        from urllib.request import Request, urlopen
+        from urllib.error import HTTPError, URLError
+
         basedir = cls.basedir()
-        shutil.rmtree(basedir, ignore_errors=True)
-        basedir.mkdir(parents=True, exist_ok=True)
-
-        # Create logs directory
-        (basedir / "logs").mkdir(exist_ok=True)
-
         platform = _platform_str()
         version = cls.version_str()
-        package_name = _get_package_name()
+
+        # GitHub repository for releases
+        github_repo = "ownself/LSP-Roslyn"
+        github_api_url = f"https://api.github.com/repos/{github_repo}/releases"
 
         try:
-            import subprocess
+            # Step 1: Get latest release info
+            headers = {
+                'User-Agent': 'LSP-Roslyn-Sublime-Plugin',
+                'Accept': 'application/vnd.github.v3+json'
+            }
 
-            # Try to download using dotnet/nuget CLI
-            # Method 1: Use nuget.exe (Windows) or mono nuget.exe (Unix)
-            nuget_install_dir = basedir / "nuget_temp"
-            nuget_install_dir.mkdir(exist_ok=True)
+            request = Request(github_api_url, headers=headers)
+            with urlopen(request, timeout=10) as response:
+                releases = json.loads(response.read().decode('utf-8'))
 
-            # Check if dotnet is available
-            dotnet_available = False
-            try:
-                result = subprocess.run(
-                    ["dotnet", "--version"],
-                    capture_output=True,
-                    timeout=5
-                )
-                dotnet_available = result.returncode == 0
-            except Exception:
-                pass
+            if not releases:
+                raise Exception("No releases found on GitHub")
 
-            if dotnet_available:
-                # Use dotnet to add the NuGet source and install the package
-                # Add the Azure DevOps NuGet feed
-                subprocess.run(
-                    [
-                        "dotnet", "nuget", "add", "source",
-                        AZURE_NUGET_FEED,
-                        "--name", "vs-impl",
-                    ],
-                    capture_output=True,
-                    timeout=30,
-                    check=False  # Don't fail if source already exists
-                )
+            # Find matching release (by tag name)
+            release = None
+            tag_name = f"{version}" if not version.startswith('v') else version
+            for r in releases:
+                if r['tag_name'] == tag_name or r['tag_name'] == f"v{version}":
+                    release = r
+                    break
 
-                # Install the package using dotnet tool
-                # Note: This requires the package to be available as a .NET tool
-                # Alternative: Use nuget.exe or manually download the .nupkg file
+            # If exact version not found, use latest
+            if not release:
+                release = releases[0]
 
-                sublime.message_dialog(
-                    "LSP-Roslyn: Manual Installation Required\n\n"
-                    f"Please manually install the Roslyn language server:\n\n"
-                    f"1. Download the package from:\n"
-                    f"   https://dev.azure.com/azure-public/vside/_artifacts/feed/vs-impl/NuGet/{package_name}\n\n"
-                    f"2. Extract the .nupkg file (it's a zip file) to:\n"
-                    f"   {basedir}\n\n"
-                    f"3. Ensure the server binary is executable\n\n"
-                    f"Or use the neutral version and dotnet:\n"
-                    f"   dotnet tool install --tool-path {basedir} Microsoft.CodeAnalysis.LanguageServer"
-                )
-                raise Exception("Manual installation required - see dialog for instructions")
-            else:
-                raise Exception("dotnet CLI not found - please install .NET SDK")
+            # Step 2: Find asset for current platform
+            asset = None
+            possible_names = [
+                f"roslyn-{platform}.zip",
+                f"Microsoft.CodeAnalysis.LanguageServer.{platform}.{version}.zip"
+            ]
+
+            for a in release['assets']:
+                for pattern in possible_names:
+                    if a['name'] == pattern:
+                        asset = a
+                        break
+                if asset:
+                    break
+
+            # Fallback: fuzzy match by platform name
+            if not asset:
+                for a in release['assets']:
+                    if platform in a['name'] and a['name'].endswith('.zip'):
+                        asset = a
+                        break
+
+            if not asset:
+                raise Exception(f"No asset found for platform: {platform}")
+
+            # Step 3: Download
+            download_url = asset['browser_download_url']
+            request = Request(download_url, headers=headers)
+
+            with urlopen(request, timeout=300) as response:
+                content = io.BytesIO(response.read())
+
+            # Step 4: Extract
+            # Remove old installation
+            target_dir = basedir / "Microsoft.CodeAnalysis.LanguageServer"
+            if target_dir.exists():
+                shutil.rmtree(target_dir)
+
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            with zipfile.ZipFile(content) as z:
+                z.extractall(target_dir)
+
+            # Step 5: Set permissions (Unix/macOS)
+            if sublime.platform() != "windows":
+                binary_path = target_dir / "content" / "LanguageServer" / platform / "Microsoft.CodeAnalysis.LanguageServer"
+                if binary_path.exists():
+                    os.chmod(binary_path, 0o755)
+
+            # Create logs directory
+            (basedir / "logs").mkdir(exist_ok=True)
+
+            # Write version file
+            version_file = basedir / "VERSION"
+            version_file.write_text(version)
+
+        except (HTTPError, URLError) as e:
+            error_msg = (
+                f"Failed to download Roslyn language server from GitHub: {e}\n\n"
+                f"Manual installation:\n"
+                f"1. Visit: https://github.com/{github_repo}/releases\n"
+                f"2. Download: Microsoft.CodeAnalysis.LanguageServer.{platform}.{version}.zip\n"
+                f"3. Extract to: {basedir}/Microsoft.CodeAnalysis.LanguageServer/\n"
+                f"4. Restart Sublime Text"
+            )
+            sublime.error_message(error_msg)
+            raise Exception("GitHub download failed") from e
 
         except Exception as e:
-            # If automatic installation fails, provide instructions
             error_msg = (
-                f"Failed to automatically install Roslyn language server: {e}\n\n"
-                f"Manual installation instructions:\n"
-                f"1. Ensure .NET SDK 8.0+ is installed\n"
-                f"2. Download {package_name} version {version} from:\n"
-                f"   https://dev.azure.com/azure-public/vside/_artifacts/feed/vs-impl\n"
-                f"3. Extract to: {basedir}\n"
-                f"4. Make the binary executable (Unix/macOS)\n\n"
-                f"Alternative: Use 'dotnet tool install' with the neutral package:\n"
-                f"   dotnet tool install --tool-path \"{basedir}\" Microsoft.CodeAnalysis.LanguageServer\n\n"
-                f"Or specify a custom command in LSP-Roslyn settings."
+                f"Failed to install Roslyn language server: {e}\n\n"
+                f"Manual installation:\n"
+                f"1. Visit: https://github.com/{github_repo}/releases\n"
+                f"2. Download: Microsoft.CodeAnalysis.LanguageServer.{platform}.{version}.zip\n"
+                f"3. Extract to: {basedir}/Microsoft.CodeAnalysis.LanguageServer/\n"
+                f"4. Restart Sublime Text"
             )
             sublime.error_message(error_msg)
             raise
