@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project.user
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Roslyn Language Server binaries (NuGet package)
+Microsoft.CodeAnalysis.LanguageServer/
+content/
+lib/
+[Content_Types].xml
+.signature.p7s
+_rels/
+*.nuspec
+
+# Server logs
+logs/
+
+# Version marker (uncomment if you want to track it in git)
+# VERSION
+
+# Distribution
+dist/
+build/

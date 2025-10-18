@@ -1,0 +1,21 @@
+[
+    {
+        "caption": "Preferences: LSP-Roslyn Settings",
+        "command": "edit_settings",
+        "args": {
+            "base_file": "${packages}/LSP-Roslyn/LSP-Roslyn.sublime-settings",
+            "default": "// Settings in here override those in \"LSP-Roslyn/LSP-Roslyn.sublime-settings\"\n{\n\t$0\n}\n"
+        }
+    },
+    {
+        "caption": "LSP-Roslyn: Restart Server",
+        "command": "lsp_restart_server",
+        "args": {
+            "config_name": "Roslyn"
+        }
+    },
+    {
+        "caption": "LSP-Roslyn: Select Solution",
+        "command": "lsp_roslyn_select_solution"
+    }
+]

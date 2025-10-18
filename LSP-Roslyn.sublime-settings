@@ -1,0 +1,87 @@
+{
+    "selector": "source.cs | source.cake",
+    "settings": {
+        // The name of the default solution used at start up if the repo has multiple solutions.
+        // e.g. 'MyAwesomeSolution.sln'. Default value is `null` which will cause the first in
+        // alphabetical order to be chosen.
+        "roslyn.defaultLaunchSolution": null,
+
+        // Background analysis settings
+        "roslyn.backgroundAnalysis": {
+            // Scope of the background analysis for .NET analyzer diagnostics.
+            // Options: "openFiles", "fullSolution", "none"
+            "dotnet_analyzer_diagnostics_scope": "openFiles",
+            // Scope of the background analysis for .NET compiler diagnostics.
+            // Options: "openFiles", "fullSolution", "none"
+            "dotnet_compiler_diagnostics_scope": "openFiles"
+        },
+
+        // Code lens settings
+        "roslyn.codeLens": {
+            // Enable code lens references
+            "dotnet_enable_references_code_lens": true,
+            // Enable tests code lens
+            "dotnet_enable_tests_code_lens": true
+        },
+
+        // Completion settings
+        "roslyn.completion": {
+            // Show regular expressions in completion list
+            "dotnet_provide_regex_completions": true,
+            // Show unimported types and extension methods in completion lists
+            "dotnet_show_completion_items_from_unimported_namespaces": true,
+            // Perform automatic object name completion
+            "dotnet_show_name_completion_suggestions": true
+        },
+
+        // Inlay hints settings
+        "roslyn.inlayHints": {
+            // Show hints for implicit object creation
+            "csharp_enable_inlay_hints_for_implicit_object_creation": true,
+            // Show hints for variables with inferred types
+            "csharp_enable_inlay_hints_for_implicit_variable_types": true,
+            // Show hints for lambda parameter types
+            "csharp_enable_inlay_hints_for_lambda_parameter_types": false,
+            // Display inline type hints
+            "csharp_enable_inlay_hints_for_types": true,
+            // Show hints for indexers
+            "dotnet_enable_inlay_hints_for_indexer_parameters": true,
+            // Show hints for literals
+            "dotnet_enable_inlay_hints_for_literal_parameters": true,
+            // Show hints for 'new' expressions
+            "dotnet_enable_inlay_hints_for_object_creation_parameters": true,
+            // Show hints for everything else
+            "dotnet_enable_inlay_hints_for_other_parameters": true,
+            // Display inline parameter name hints
+            "dotnet_enable_inlay_hints_for_parameters": true,
+            // Suppress hints when parameter names differ only by suffix
+            "dotnet_suppress_inlay_hints_for_parameters_that_differ_only_by_suffix": true,
+            // Suppress hints when argument matches parameter name
+            "dotnet_suppress_inlay_hints_for_parameters_that_match_argument_name": true,
+            // Suppress hints when parameter name matches the method's intent
+            "dotnet_suppress_inlay_hints_for_parameters_that_match_method_intent": true
+        },
+
+        // Symbol search settings
+        "roslyn.symbolSearch": {
+            // Search symbols in reference assemblies
+            "dotnet_search_reference_assemblies": true
+        },
+
+        // Formatting settings
+        "roslyn.formatting": {
+            // Sort using directives on format alphabetically
+            "dotnet_organize_imports_on_format": false
+        },
+
+        // Logging level for the Roslyn language server
+        // Options: "Trace", "Debug", "Information", "Warning", "Error", "Critical", "None"
+        "roslyn.loggingLevel": "Information",
+
+        // Whether to enable Roslyn analyzers support
+        "roslyn.enableAnalyzers": true,
+
+        // Whether to load projects on demand (useful for large solutions)
+        "roslyn.loadProjectsOnDemand": false
+    }
+}
