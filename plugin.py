@@ -21,7 +21,7 @@ from LSP.plugin import unregister_plugin
 from LSP.plugin import WorkspaceFolder
 
 # Roslyn language server version - matches VSCode C# extension
-VERSION = "4.14.0-3.24630.3"
+VERSION = "5.3.0-1.25517.107"
 
 # Azure DevOps NuGet feed URL for Roslyn language server
 # Note: These packages are available at:

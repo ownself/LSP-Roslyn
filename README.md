@@ -1,316 +1,143 @@
-# LSP-Roslyn
+# LSP-Roslyn (For Sublime Text)
 
-This is a helper package that provides C# language support for Sublime Text using the modern [Roslyn Language Server](https://github.com/dotnet/roslyn). This is the same language server used by the Visual Studio Code C# Extension and C# Dev Kit.
+[中文文档](README_cn.md) | English
 
-## Why LSP-Roslyn instead of LSP-OmniSharp?
+This is a C# LSP plugin for Sublime Text. Unlike LSP-OmniSharp, LSP-Roslyn directly uses Microsoft's Roslyn as the backend, which is the same backend used by the current Visual Studio Code C# Extension and C# Dev Kit.
 
-The OmniSharp language server has been discontinued in favor of the newer Roslyn language server. LSP-Roslyn provides:
-
-- **Active Development**: Regularly updated with new features and bug fixes
-- **Better Performance**: Improved memory usage and responsiveness
-- **Modern Features**: Support for latest C# language features
-- **Source Generators**: Full support for source-generated files
-- **Better Code Actions**: More comprehensive refactoring and quick fixes
+Compared to the OmniSharp solution, it offers more modern feature design and better performance.
 
 ## Requirements
 
-To use this package, you must have:
-
-- **Sublime Text 4** (Build 4075 or later)
-- **[LSP](https://packagecontrol.io/packages/LSP)** package installed via Package Control
+- Sublime Text 4 (Build 4107 or later)
+	- Build 4107 : 20 May 2021
+- **[LSP](https://packagecontrol.io/packages/LSP)** Package Installed via Package Control
 - **[.NET SDK 8.0 or higher](https://dotnet.microsoft.com/download)** installed
-- (Optional but recommended) **[LSP-file-watcher-chokidar](https://github.com/sublimelsp/LSP-file-watcher-chokidar)** for file watching support
 
-## Applicable Selectors
+## Plugin Installation
 
-This language server operates on views with the `source.cs` or `source.cake` base scope.
+### 1. Via Package Control (Coming Soon)
 
-## Installation
+1. First, ensure that the LSP plugin is installed in Sublime Text
+2. Install the LSP-Roslyn plugin through Package Control
 
-### Via Package Control (Coming Soon)
+### 2. Manual Installation
 
-1. Install the LSP package if not already installed
-2. Install LSP-Roslyn via Package Control
-
-### Manual Installation
-
-#### Step 1: Install the Plugin
-
-Clone this repository into your Sublime Text Packages directory:
+Clone the plugin repository to your Sublime Text Packages directory:
 
 ```bash
 # macOS
 cd "~/Library/Application Support/Sublime Text/Packages"
-git clone https://github.com/yourusername/LSP-Roslyn.git
-
 # Windows (PowerShell)
 cd "$env:APPDATA\Sublime Text\Packages"
-git clone https://github.com/yourusername/LSP-Roslyn.git
-
 # Linux
 cd "~/.config/sublime-text/Packages"
-git clone https://github.com/yourusername/LSP-Roslyn.git
+# Install by git
+git clone https://github.com/ownself/LSP-Roslyn.git
 ```
 
-#### Step 2: Install the Roslyn Language Server
+# Roslyn Installation
 
-The Roslyn language server is hosted on Azure DevOps and requires manual installation. Choose one of the following methods:
+### 1. Automatic Download
 
-**Method A: Using the Installation Scripts (Recommended)**
+Under normal circumstances, when you open a .cs file with Sublime Text, it will automatically search for .sln and .csproj files and enable LSP-Roslyn.
 
-```bash
-# Unix/Linux/macOS
-cd LSP-Roslyn
-chmod +x install_roslyn.sh
-./install_roslyn.sh
+When enabled for the first time, the plugin will attempt to automatically download the corresponding Roslyn executable based on your operating system and extract it to the plugin directory.
 
-# Windows (PowerShell as Administrator)
-cd LSP-Roslyn
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\install_roslyn.ps1
-```
+Therefore, simply wait a moment. After the download completes, it will automatically extract and start Roslyn, and Sublime Text's C# LSP functionality will automatically take effect.
 
-**Method B: Using dotnet CLI**
+Current automatic download Roslyn version:
 
-```bash
-# Get your Sublime Text Package Storage path:
-# macOS: ~/Library/Application Support/Sublime Text/Package Storage/LSP-Roslyn
-# Windows: %APPDATA%\Sublime Text\Package Storage\LSP-Roslyn
-# Linux: ~/.config/sublime-text/Package Storage/LSP-Roslyn
+- Pre-Release : 5.3.0-1.25517.107
 
-# Install using dotnet tool (neutral version)
-dotnet tool install --tool-path "<path-to-package-storage>/LSP-Roslyn" \
-    Microsoft.CodeAnalysis.LanguageServer
-```
+Supported system platforms for automatic download:
 
-**Method C: Manual Download**
+- win-x86
+- win-x64
+- win-arm64
+- osx-x64
+- osx-arm64
+- linux-x64
+- linux-arm64
 
-1. Visit the Azure DevOps NuGet feed:
-   - Windows x64: https://dev.azure.com/azure-public/vside/_artifacts/feed/vs-impl/NuGet/Microsoft.CodeAnalysis.LanguageServer.win-x64
-   - macOS x64: https://dev.azure.com/azure-public/vside/_artifacts/feed/vs-impl/NuGet/Microsoft.CodeAnalysis.LanguageServer.osx-x64
-   - macOS ARM64: https://dev.azure.com/azure-public/vside/_artifacts/feed/vs-impl/NuGet/Microsoft.CodeAnalysis.LanguageServer.osx-arm64
-   - Linux x64: https://dev.azure.com/azure-public/vside/_artifacts/feed/vs-impl/NuGet/Microsoft.CodeAnalysis.LanguageServer.linux-x64
+### 2. Manual Download
 
-2. Download the latest version (e.g., `4.14.0-3.24630.3`)
+If automatic download doesn't work, or if your platform is not in the plugin's default supported list, you may need to manually download Roslyn and extract it to the Microsoft.CodeAnalysis.LanguageServer directory within the plugin directory under Sublime Text's Packages.
 
-3. Rename the `.nupkg` file to `.zip` and extract it
+For more information about downloading Roslyn executable files, please refer to [roslyn-packages](https://github.com/dotnet/roslyn/blob/main/docs/wiki/NuGet-packages.md)
 
-4. Copy the contents to `<Package Storage>/LSP-Roslyn/`
+# Configuration
 
-5. Make the binary executable (Unix/macOS):
-   ```bash
-   chmod +x "<Package Storage>/LSP-Roslyn/Microsoft.CodeAnalysis.LanguageServer"
-   ```
-
-**Method D: Use Custom Command**
-
-If you have the Roslyn server installed elsewhere, specify a custom command in your settings:
-
-```json
-{
-    "command": [
-        "/path/to/Microsoft.CodeAnalysis.LanguageServer",
-        "--logLevel=Information",
-        "--extensionLogDirectory=/tmp/roslyn-logs",
-        "--stdio"
-    ]
-}
-```
-
-#### Step 3: Verify Installation
-
-1. Open a C# file in Sublime Text
-2. Check the status bar - it should show "LSP: Roslyn"
-3. If there are issues, check: Tools → LSP → Troubleshoot Server Configuration
-
-## Installation Location
-
-The Roslyn language server is installed **in the same directory as the plugin code**:
-
-- **macOS**: `~/Library/Application Support/Sublime Text/Packages/LSP-Roslyn/`
-- **Windows**: `%APPDATA%\Sublime Text\Packages\LSP-Roslyn\`
-- **Linux**: `~/.config/sublime-text/Packages/LSP-Roslyn/`
-
-The server binary can be in any of these locations (checked in order):
-
-1. **Organized structure** (recommended):
-   `Packages/LSP-Roslyn/Microsoft.CodeAnalysis.LanguageServer/content/LanguageServer/{platform}/`
-2. **Direct extraction**:
-   `Packages/LSP-Roslyn/content/LanguageServer/{platform}/`
-3. **Custom location**:
-   `Packages/LSP-Roslyn/`
-
-Where `{platform}` is `win-x64`, `osx-x64`, `osx-arm64`, `linux-x64`, etc.
-
-The plugin automatically detects the server location from these paths.
-
-## Configuration
-
-Configure LSP-Roslyn by running `Preferences: LSP-Roslyn Settings` from the Command Palette.
-
-### Key Settings
-
-#### Solution Selection
+You can configure settings through `Preferences: LSP-Roslyn Settings` in the Command Palette:
 
 ```json
 {
     "settings": {
         // Specify default solution if multiple .sln files exist
-        "roslyn.defaultLaunchSolution": "MyProject.sln"
-    }
-}
-```
-
-#### Background Analysis
-
-Control the scope of diagnostics analysis:
-
-```json
-{
-    "settings": {
+        "roslyn.defaultLaunchSolution": "MyProject.sln",
+		// Background analysis
         "roslyn.backgroundAnalysis": {
             "dotnet_analyzer_diagnostics_scope": "openFiles",  // or "fullSolution", "none"
             "dotnet_compiler_diagnostics_scope": "openFiles"
-        }
-    }
-}
-```
-
-#### Inlay Hints
-
-Enable inline type and parameter hints:
-
-```json
-{
-    "settings": {
+        },
+		// Inlay Hints
         "roslyn.inlayHints": {
             "csharp_enable_inlay_hints_for_implicit_variable_types": true,
             "dotnet_enable_inlay_hints_for_parameters": true
-        }
-    }
-}
-```
-
-#### Code Lens
-
-Show references and test indicators:
-
-```json
-{
-    "settings": {
-        "roslyn.codeLens": {
+        },
+		// Code Lens
+	    "roslyn.codeLens": {
             "dotnet_enable_references_code_lens": true,
             "dotnet_enable_tests_code_lens": true
-        }
+        },
+		// better performance for large solution
+		"roslyn.loadProjectsOnDemand": true,
     }
 }
 ```
 
-## Capabilities
+# Features
 
-LSP-Roslyn provides comprehensive C# language support:
+**Core Features**
 
-### Core Features
-- **Code Completion** - IntelliSense with automatic import suggestions
+- **Code Completion** - IntelliSense and auto-completion suggestions
 - **Signature Help** - Parameter information for methods
 - **Hover Information** - Documentation and type information
-- **Go to Definition** - Navigate to symbol definitions
-- **Find References** - Find all usages of symbols
-- **Rename** - Rename symbols across the solution
+- **Go to Definition** - Jump to function definitions
+- **Find References** - List all references
+- **Rename** - Rename across projects
 
-### Advanced Features
-- **Code Actions** - Quick fixes and refactorings
-- **Code Lens** - Inline references and test indicators
+**Advanced Features**
+
+- **Code Actions** - Quick fixes and refactoring
+- **Code Lens** - Inline reference count indicators
 - **Inlay Hints** - Type and parameter hints
-- **Diagnostics** - Real-time error and warning detection
-- **Formatting** - Code formatting support
-- **Symbol Search** - Workspace-wide symbol search
-- **Source Generators** - Support for source-generated files
+- **Diagnostics** - Real-time error and warning notifications
+- **Formatting** - Automatic code formatting
+- **Symbol Search** - Project-wide function definition search
+- **Source Generators** - Source file generation support
 
-### Roslyn Analyzers
-- **Built-in Analyzers** - Code quality and style analyzers
-- **Custom Analyzers** - Support for third-party analyzer packages
-- **EditorConfig** - Respects .editorconfig settings
+**Roslyn Analyzers**
 
-## Commands
+- **Built-in Analyzers** - Code quality and style analysis
+- **Custom Analyzers** - Support for third-party analyzers
+- **EditorConfig** - Support for .editorconfig settings
 
-Available commands from the Command Palette:
+# Commands
 
-- **LSP-Roslyn: Restart Server** - Restart the language server
-- **LSP-Roslyn: Select Solution** - Choose a different solution file
-- **Preferences: LSP-Roslyn Settings** - Open settings file
+Commands available in the Command Palette:
 
-## Multiple Solutions
+- **LSP-Roslyn: Restart Server** - Restart LSP-Roslyn
+- **LSP-Roslyn: Select Solution** - Switch projects
+- **Preferences: LSP-Roslyn Settings** - Open LSP-Roslyn configuration
 
-If your workspace contains multiple solution files, LSP-Roslyn will:
+# License
 
-1. Check for `roslyn.defaultLaunchSolution` setting
-2. If not set, use the first solution file (alphabetically)
-3. Use the `LSP-Roslyn: Select Solution` command to switch between solutions
+MIT License. See [LICENSE](LICENSE) for details
 
-## Project Structure Support
+# Acknowledgments
 
-LSP-Roslyn supports:
+I have loved this elegant and high-performance code editor since Sublime Text 2, and for 3-4 years it was my primary editor at work. Although I now use more modern editors like Neovim and Rider in my daily work, Sublime Text remains my trusty companion when handling JSON or text data. Contributing to this community has always been my wish.
 
-- **Solution files**: `.sln`, `.slnx`, `.slnf`
-- **Project files**: `.csproj` (standalone projects without solution)
-- **Multiple projects**: Full solution support with project references
+Plugin inspiration comes from [LSP-OmniSharp](https://github.com/sublimelsp/LSP-OmniSharp)
 
-## Troubleshooting
-
-### Server Not Starting
-
-1. Verify .NET SDK is installed: `dotnet --version`
-2. Check LSP logs: Tools → LSP → Troubleshoot Server
-3. Try restarting the server: Command Palette → LSP-Roslyn: Restart Server
-
-### Solution Not Loading
-
-1. Ensure solution file is valid: `dotnet build YourSolution.sln`
-2. Run `dotnet restore` in the solution directory
-3. Set `roslyn.defaultLaunchSolution` if multiple solutions exist
-
-### Performance Issues
-
-For large solutions:
-
-```json
-{
-    "settings": {
-        "roslyn.loadProjectsOnDemand": true,
-        "roslyn.backgroundAnalysis": {
-            "dotnet_analyzer_diagnostics_scope": "openFiles"
-        }
-    }
-}
-```
-
-### Viewing Logs
-
-Server logs are stored in:
-`$DATA/Package Storage/LSP-Roslyn/logs/`
-
-## Differences from OmniSharp
-
-| Feature | LSP-OmniSharp | LSP-Roslyn |
-|---------|---------------|------------|
-| Server | OmniSharp (discontinued) | Roslyn (active) |
-| .NET Version | .NET 6+ | .NET 8+ |
-| Source Generators | Limited | Full support |
-| Performance | Good | Better |
-| Latest C# Features | Delayed | Immediate |
-| Maintenance | Discontinued | Active |
-
-## Contributing
-
-Issues and pull requests are welcome! Please visit the [GitHub repository](https://github.com/yourusername/LSP-Roslyn).
-
-## License
-
-This package is released under the MIT License. See [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-- Based on the [LSP-OmniSharp](https://github.com/sublimelsp/LSP-OmniSharp) package structure
-- Uses the [Roslyn Language Server](https://github.com/dotnet/roslyn) from Microsoft
-- Built on the [LSP](https://github.com/sublimelsp/LSP) package for Sublime Text
+Another Sublime Text plugin I wrote: [CursorWordHighlighter](https://github.com/ownself/CursorWordHighlighter)

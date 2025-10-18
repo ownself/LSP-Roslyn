@@ -8,7 +8,7 @@ the same server used by Visual Studio Code's C# Dev Kit.
 
 Requirements:
 -------------
-1. Sublime Text 4 (Build 4075+)
+1. Sublime Text 4 (Build 4107+)
 2. LSP package (install via Package Control)
 3. .NET SDK 8.0 or higher (https://dotnet.microsoft.com/download)
 
@@ -31,8 +31,8 @@ Key settings:
 
 For more information:
 ---------------------
-- Documentation: https://github.com/yourusername/LSP-Roslyn
-- Report issues: https://github.com/yourusername/LSP-Roslyn/issues
+- Documentation: https://github.com/ownself/LSP-Roslyn
+- Report issues: https://github.com/ownself/LSP-Roslyn/issues
 - LSP package: https://packagecontrol.io/packages/LSP
 
 Enjoy coding in C# with Sublime Text!
