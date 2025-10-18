@@ -4,7 +4,7 @@
 
 This is a C# LSP plugin for Sublime Text. Unlike LSP-OmniSharp, LSP-Roslyn directly uses Microsoft's Roslyn as the backend, which is the same backend used by the current Visual Studio Code C# Extension and C# Dev Kit.
 
-![[lsp-roslyn.png]]
+![LSP-Roslyn](lsp-roslyn.png)
 
 Compared to the OmniSharp solution, it offers more modern feature design and better performance.
 
