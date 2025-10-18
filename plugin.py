@@ -56,7 +56,7 @@ def _platform_str() -> str:
 
 def _get_package_name() -> str:
     """Returns the full package name for the current platform."""
-    return f"Microsoft.CodeAnalysis.LanguageServer.{_platform_str()}"
+    return "Microsoft.CodeAnalysis.LanguageServer.{}".format(_platform_str())
 
 
 class Roslyn(AbstractPlugin):
@@ -66,7 +66,7 @@ class Roslyn(AbstractPlugin):
 
     @classmethod
     def get_settings(cls) -> sublime.Settings:
-        return sublime.load_settings(f"LSP-{cls.name()}.sublime-settings")
+        return sublime.load_settings("LSP-{}.sublime-settings".format(cls.name()))
 
     @classmethod
     def version_str(cls) -> str:
@@ -138,7 +138,7 @@ class Roslyn(AbstractPlugin):
         return [
             str(cls.binary_path()),
             "--logLevel=Information",
-            f"--extensionLogDirectory={cls.basedir() / 'logs'}",
+            "--extensionLogDirectory={}".format(cls.basedir() / 'logs'),
             "--stdio",
         ]
 
@@ -179,7 +179,7 @@ class Roslyn(AbstractPlugin):
 
         # GitHub repository for releases
         github_repo = "ownself/LSP-Roslyn"
-        github_api_url = f"https://api.github.com/repos/{github_repo}/releases"
+        github_api_url = "https://api.github.com/repos/{}/releases".format(github_repo)
 
         try:
             # Step 1: Get latest release info
@@ -197,9 +197,9 @@ class Roslyn(AbstractPlugin):
 
             # Find matching release (by tag name)
             release = None
-            tag_name = f"{version}" if not version.startswith('v') else version
+            tag_name = version if not version.startswith('v') else version
             for r in releases:
-                if r['tag_name'] == tag_name or r['tag_name'] == f"v{version}":
+                if r['tag_name'] == tag_name or r['tag_name'] == "v{}".format(version):
                     release = r
                     break
 
@@ -210,8 +210,8 @@ class Roslyn(AbstractPlugin):
             # Step 2: Find asset for current platform
             asset = None
             possible_names = [
-                f"roslyn-{platform}.zip",
-                f"Microsoft.CodeAnalysis.LanguageServer.{platform}.{version}.zip"
+                "roslyn-{}.zip".format(platform),
+                "Microsoft.CodeAnalysis.LanguageServer.{}.{}.zip".format(platform, version)
             ]
 
             for a in release['assets']:
@@ -230,7 +230,7 @@ class Roslyn(AbstractPlugin):
                         break
 
             if not asset:
-                raise Exception(f"No asset found for platform: {platform}")
+                raise Exception("No asset found for platform: {}".format(platform))
 
             # Step 3: Download
             download_url = asset['browser_download_url']
@@ -265,25 +265,25 @@ class Roslyn(AbstractPlugin):
 
         except (HTTPError, URLError) as e:
             error_msg = (
-                f"Failed to download Roslyn language server from GitHub: {e}\n\n"
-                f"Manual installation:\n"
-                f"1. Visit: https://github.com/{github_repo}/releases\n"
-                f"2. Download: Microsoft.CodeAnalysis.LanguageServer.{platform}.{version}.zip\n"
-                f"3. Extract to: {basedir}/Microsoft.CodeAnalysis.LanguageServer/\n"
-                f"4. Restart Sublime Text"
-            )
+                "Failed to download Roslyn language server from GitHub: {}\n\n"
+                "Manual installation:\n"
+                "1. Visit: https://github.com/{}/releases\n"
+                "2. Download: Microsoft.CodeAnalysis.LanguageServer.{}.{}.zip\n"
+                "3. Extract to: {}/Microsoft.CodeAnalysis.LanguageServer/\n"
+                "4. Restart Sublime Text"
+            ).format(e, github_repo, platform, version, basedir)
             sublime.error_message(error_msg)
-            raise Exception("GitHub download failed") from e
+            raise Exception("GitHub download failed")
 
         except Exception as e:
             error_msg = (
-                f"Failed to install Roslyn language server: {e}\n\n"
-                f"Manual installation:\n"
-                f"1. Visit: https://github.com/{github_repo}/releases\n"
-                f"2. Download: Microsoft.CodeAnalysis.LanguageServer.{platform}.{version}.zip\n"
-                f"3. Extract to: {basedir}/Microsoft.CodeAnalysis.LanguageServer/\n"
-                f"4. Restart Sublime Text"
-            )
+                "Failed to install Roslyn language server: {}\n\n"
+                "Manual installation:\n"
+                "1. Visit: https://github.com/{}/releases\n"
+                "2. Download: Microsoft.CodeAnalysis.LanguageServer.{}.{}.zip\n"
+                "3. Extract to: {}/Microsoft.CodeAnalysis.LanguageServer/\n"
+                "4. Restart Sublime Text"
+            ).format(e, github_repo, platform, version, basedir)
             sublime.error_message(error_msg)
             raise
 
@@ -354,7 +354,6 @@ class Roslyn(AbstractPlugin):
             return
 
         # Find solution or project files in workspace
-        window = session.window
         workspace_folders = session.get_workspace_folders()
 
         if not workspace_folders:
@@ -382,7 +381,7 @@ class Roslyn(AbstractPlugin):
         notification = Notification("solution/open", {"solution": uri})
 
         session.send_notification(notification)
-        self._print(False, f"Opened solution: {Path(solution_path).name}")
+        self._print(False, "Opened solution: {}".format(Path(solution_path).name))
 
     async def _open_projects(self, project_paths: list[str]) -> None:
         """Send project/open notification to the server."""
@@ -394,7 +393,7 @@ class Roslyn(AbstractPlugin):
         notification = Notification("project/open", {"projects": uris})
 
         session.send_notification(notification)
-        self._print(False, f"Opened {len(project_paths)} project(s)")
+        self._print(False, "Opened {} project(s)".format(len(project_paths)))
 
     def _find_solution_file(self, root_path: str) -> Optional[str]:
         """Find a solution file (.sln, .slnx, .slnf) in the workspace."""
@@ -405,7 +404,7 @@ class Roslyn(AbstractPlugin):
         solutions = []
 
         for ext in extensions:
-            for file in Path(root_path).rglob(f"*{ext}"):
+            for file in Path(root_path).rglob("*{}".format(ext)):
                 solutions.append(str(file))
 
         if not solutions:
