@@ -4,6 +4,8 @@
 
 这是一个用于Sublime Text的C# LSP插件，不同于LSP-OmniSharp，LSP-Roslyn直接使用了微软的Roslyn作为后端，即当前Visual Studio Code C#扩展和C# Dev Kit所使用的相同后端
 
+![[lsp-roslyn.png]]
+
 对比OmniSharp方案，具有更现代的功能设计和性能表现
 
 ## 配置需求
