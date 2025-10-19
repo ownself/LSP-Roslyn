@@ -20,9 +20,6 @@ from LSP.plugin import register_plugin
 from LSP.plugin import unregister_plugin
 from LSP.plugin import WorkspaceFolder
 
-# Plugin version
-__version__ = "0.6.6"
-
 # Roslyn language server version - matches VSCode C# extension
 ROSLYN_VERSION = "5.3.0-1.25517.107"
 
