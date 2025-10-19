@@ -199,10 +199,11 @@ class Roslyn(AbstractPlugin):
                 raise Exception("No releases found on GitHub")
 
             # Find matching release (by tag name)
+            # Roslyn server releases use "roslyn-" prefix to distinguish from plugin version tags
             release = None
-            tag_name = version if not version.startswith('v') else version
+            roslyn_tag_name = "roslyn-{}".format(version)
             for r in releases:
-                if r['tag_name'] == tag_name or r['tag_name'] == "v{}".format(version):
+                if r['tag_name'] == roslyn_tag_name:
                     release = r
                     break
 
@@ -270,11 +271,11 @@ class Roslyn(AbstractPlugin):
             error_msg = (
                 "Failed to download Roslyn language server from GitHub: {}\n\n"
                 "Manual installation:\n"
-                "1. Visit: https://github.com/{}/releases\n"
-                "2. Download: Microsoft.CodeAnalysis.LanguageServer.{}.{}.zip\n"
+                "1. Visit: https://github.com/{}/releases/tag/roslyn-{}\n"
+                "2. Download: {}.zip\n"
                 "3. Extract to: {}/Microsoft.CodeAnalysis.LanguageServer/\n"
                 "4. Restart Sublime Text"
-            ).format(e, github_repo, platform, version, basedir)
+            ).format(e, github_repo, version, platform, basedir)
             sublime.error_message(error_msg)
             raise Exception("GitHub download failed")
 
@@ -282,11 +283,11 @@ class Roslyn(AbstractPlugin):
             error_msg = (
                 "Failed to install Roslyn language server: {}\n\n"
                 "Manual installation:\n"
-                "1. Visit: https://github.com/{}/releases\n"
-                "2. Download: Microsoft.CodeAnalysis.LanguageServer.{}.{}.zip\n"
+                "1. Visit: https://github.com/{}/releases/tag/roslyn-{}\n"
+                "2. Download: {}.zip\n"
                 "3. Extract to: {}/Microsoft.CodeAnalysis.LanguageServer/\n"
                 "4. Restart Sublime Text"
-            ).format(e, github_repo, platform, version, basedir)
+            ).format(e, github_repo, version, platform, basedir)
             sublime.error_message(error_msg)
             raise
 
