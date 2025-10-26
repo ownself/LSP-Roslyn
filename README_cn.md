@@ -13,7 +13,7 @@
 - Sublime Text 4 (Build 4107 or later)
 	- Build 4107 : 20 May 2021
 - **[LSP](https://packagecontrol.io/packages/LSP)** Package Installed via Package Control
-- **[.NET SDK 8.0 or higher](https://dotnet.microsoft.com/download)** installed
+- **[.NET SDK 9.0 or higher](https://dotnet.microsoft.com/download)** installed（至少需要dotnet 9.0 runtime以确保Roslyn可以工作）
 
 ## 插件安装方法
 

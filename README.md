@@ -13,7 +13,7 @@ Compared to the OmniSharp solution, it offers more modern feature design and bet
 - Sublime Text 4 (Build 4107 or later)
 	- Build 4107 : 20 May 2021
 - **[LSP](https://packagecontrol.io/packages/LSP)** Package Installed via Package Control
-- **[.NET SDK 8.0 or higher](https://dotnet.microsoft.com/download)** installed
+- **[.NET SDK 9.0 or higher](https://dotnet.microsoft.com/download)** installed (at least you need dotnet 9.0 runtime to make Roslyn work)
 
 ## Plugin Installation
 
