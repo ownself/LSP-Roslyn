@@ -78,6 +78,13 @@
         // Options: "Trace", "Debug", "Information", "Warning", "Error", "Critical", "None"
         "roslyn.loggingLevel": "Information",
 
+        // Print extra debug logs to Sublime console.
+        "roslyn.debug": false,
+
+        // Force opening csproj(s) instead of sln.
+        // Useful for Unity projects or large repos.
+        "roslyn.forceProjectOpen": false,
+
         // Whether to enable Roslyn analyzers support
         "roslyn.enableAnalyzers": true,
 
