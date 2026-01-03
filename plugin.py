@@ -394,7 +394,9 @@ class Roslyn(AbstractPlugin):
         if "roslyn.formatting" in nested:
             roslyn_config["csharp|formatting"] = nested.get("roslyn.formatting")
 
-        self._debug("workspace/configuration nested settings keys: {}", sorted(list(nested.keys())))
+        if not getattr(self, "_did_log_config_keys", False):
+            setattr(self, "_did_log_config_keys", True)
+            self._debug("workspace/configuration settings keys: {}", sorted(list(nested.keys())))
 
         configuration.update(roslyn_config)
 
@@ -498,7 +500,9 @@ class Roslyn(AbstractPlugin):
             self._debug("No solution file found under: {}", root_path)
             return None
 
-        self._debug("Found solutions ({}): {}", len(solutions), solutions)
+        self._debug("Found solutions: {}", len(solutions))
+        if len(solutions) <= 5:
+            self._debug("Solutions: {}", solutions)
 
         # If a default solution is specified, use it
         if default_solution:
@@ -522,7 +526,9 @@ class Roslyn(AbstractPlugin):
             if parts.intersection({"obj", "bin", "Library", "Temp", "Logs", "Packages"}):
                 continue
             projects.append(str(file))
-        self._debug("Found projects ({}): {}", len(projects), projects)
+        self._debug("Found projects: {}", len(projects))
+        if len(projects) <= 10:
+            self._debug("Projects: {}", projects)
         return projects
 
     def _find_unity_main_projects(self, root_path: str) -> list[str]:
