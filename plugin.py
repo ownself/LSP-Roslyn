@@ -209,9 +209,10 @@ class Roslyn(AbstractPlugin):
     @classmethod
     def install_or_update(cls) -> None:
         """Download and install the Roslyn language server from GitHub releases."""
-        import json
         import zipfile
         import io
+        import time
+        import ssl
         from urllib.request import Request, urlopen
         from urllib.error import HTTPError, URLError
 
@@ -221,65 +222,65 @@ class Roslyn(AbstractPlugin):
 
         # GitHub repository for releases
         github_repo = "ownself/LSP-Roslyn"
-        github_api_url = "https://api.github.com/repos/{}/releases".format(github_repo)
+
+        # Create SSL context
+        ssl_context = ssl.create_default_context()
+
+        def fetch_with_retry(url: str, headers: dict, timeout: int = 30, max_retries: int = 3) -> bytes:
+            """Fetch URL with retry logic."""
+            last_error = None
+            for attempt in range(max_retries):
+                try:
+                    request = Request(url, headers=headers)
+                    with urlopen(request, timeout=timeout, context=ssl_context) as response:
+                        return response.read()
+                except (HTTPError, URLError, ssl.SSLError) as e:
+                    last_error = e
+                    if isinstance(e, HTTPError) and e.code == 404:
+                        raise  # Don't retry 404 errors
+                    if attempt < max_retries - 1:
+                        time.sleep(2**attempt)  # Exponential backoff
+                    continue
+            raise last_error  # type: ignore
 
         try:
-            # Step 1: Get latest release info
-            headers = {"User-Agent": "LSP-Roslyn-Sublime-Plugin", "Accept": "application/vnd.github.v3+json"}
+            headers = {"User-Agent": "LSP-Roslyn-Sublime-Plugin/1.0"}
 
-            request = Request(github_api_url, headers=headers)
-            with urlopen(request, timeout=10) as response:
-                releases = json.loads(response.read().decode("utf-8"))
+            # Construct direct download URL (bypasses API rate limits)
+            # Format: https://github.com/{repo}/releases/download/{tag}/{asset_name}
+            roslyn_tag = "roslyn-{}".format(version)
 
-            if not releases:
-                raise Exception("No releases found on GitHub")
-
-            # Find matching release (by tag name)
-            # Roslyn server releases use "roslyn-" prefix to distinguish from plugin version tags
-            release = None
-            roslyn_tag_name = "roslyn-{}".format(version)
-            for r in releases:
-                if r["tag_name"] == roslyn_tag_name:
-                    release = r
-                    break
-
-            # If exact version not found, use latest
-            if not release:
-                release = releases[0]
-
-            # Step 2: Find asset for current platform
-            asset = None
-            possible_names = [
-                "roslyn-{}.zip".format(platform),
+            # Try multiple asset name formats
+            asset_names = [
                 "Microsoft.CodeAnalysis.LanguageServer.{}.{}.zip".format(platform, version),
+                "roslyn-{}.zip".format(platform),
             ]
 
-            for a in release["assets"]:
-                for pattern in possible_names:
-                    if a["name"] == pattern:
-                        asset = a
-                        break
-                if asset:
+            content = None
+            last_error = None
+
+            for asset_name in asset_names:
+                download_url = "https://github.com/{}/releases/download/{}/{}".format(
+                    github_repo, roslyn_tag, asset_name
+                )
+                cls._debug_static("Trying download URL: {}", download_url)
+
+                try:
+                    content_bytes = fetch_with_retry(download_url, headers, timeout=300)
+                    content = io.BytesIO(content_bytes)
+                    cls._debug_static("Download successful: {}", asset_name)
                     break
+                except HTTPError as e:
+                    last_error = e
+                    if e.code == 404:
+                        cls._debug_static("Asset not found: {}", asset_name)
+                        continue
+                    raise
 
-            # Fallback: fuzzy match by platform name
-            if not asset:
-                for a in release["assets"]:
-                    if platform in a["name"] and a["name"].endswith(".zip"):
-                        asset = a
-                        break
+            if content is None:
+                raise Exception("No matching asset found. Last error: {}".format(last_error))
 
-            if not asset:
-                raise Exception("No asset found for platform: {}".format(platform))
-
-            # Step 3: Download
-            download_url = asset["browser_download_url"]
-            request = Request(download_url, headers=headers)
-
-            with urlopen(request, timeout=300) as response:
-                content = io.BytesIO(response.read())
-
-            # Step 4: Extract
+            # Extract
             # Remove old installation
             target_dir = basedir / "Microsoft.CodeAnalysis.LanguageServer"
             if target_dir.exists():
@@ -290,7 +291,7 @@ class Roslyn(AbstractPlugin):
             with zipfile.ZipFile(content) as z:
                 z.extractall(target_dir)
 
-            # Step 5: Set permissions (Unix/macOS)
+            # Set permissions (Unix/macOS)
             if sublime.platform() != "windows":
                 binary_path = (
                     target_dir / "content" / "LanguageServer" / platform / "Microsoft.CodeAnalysis.LanguageServer"
@@ -305,27 +306,17 @@ class Roslyn(AbstractPlugin):
             version_file = basedir / "VERSION"
             version_file.write_text(version)
 
-        except (HTTPError, URLError) as e:
-            error_msg = (
-                "Failed to download Roslyn language server from GitHub: {}\n\n"
-                "Manual installation:\n"
-                "1. Visit: https://github.com/{}/releases/tag/roslyn-{}\n"
-                "2. Download: {}.zip\n"
-                "3. Extract to: {}/Microsoft.CodeAnalysis.LanguageServer/\n"
-                "4. Restart Sublime Text"
-            ).format(e, github_repo, version, platform, basedir)
-            sublime.error_message(error_msg)
-            raise Exception("GitHub download failed")
+            cls._debug_static("Installation complete")
 
         except Exception as e:
             error_msg = (
                 "Failed to install Roslyn language server: {}\n\n"
                 "Manual installation:\n"
                 "1. Visit: https://github.com/{}/releases/tag/roslyn-{}\n"
-                "2. Download: {}.zip\n"
+                "2. Download: Microsoft.CodeAnalysis.LanguageServer.{}.{}.zip\n"
                 "3. Extract to: {}/Microsoft.CodeAnalysis.LanguageServer/\n"
                 "4. Restart Sublime Text"
-            ).format(e, github_repo, version, platform, basedir)
+            ).format(e, github_repo, version, platform, version, basedir)
             sublime.error_message(error_msg)
             raise
 
@@ -393,6 +384,11 @@ class Roslyn(AbstractPlugin):
         # Formatting settings
         if "roslyn.formatting" in nested:
             roslyn_config["csharp|formatting"] = nested.get("roslyn.formatting")
+
+        # Project system settings - explicitly disable binlog generation by default
+        # This prevents .binlog files from being created in project directories
+        binlog_path = nested.get("projects.dotnet_binary_log_path")
+        roslyn_config["projects.dotnet_binary_log_path"] = binlog_path  # null by default
 
         if not getattr(self, "_did_log_config_keys", False):
             setattr(self, "_did_log_config_keys", True)

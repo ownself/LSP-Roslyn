@@ -78,6 +78,12 @@
         // Options: "Trace", "Debug", "Information", "Warning", "Error", "Critical", "None"
         "roslyn.loggingLevel": "Information",
 
+        // Path to write MSBuild binary logs (.binlog) during design-time builds.
+        // Set to null (default) to disable binlog generation.
+        // Set to a directory path to enable binlog generation for debugging.
+        // Example: "C:/temp/roslyn-binlogs"
+        "projects.dotnet_binary_log_path": null,
+
         // Print extra debug logs to Sublime console.
         "roslyn.debug": false,
 
