@@ -345,62 +345,74 @@ class Roslyn(AbstractPlugin):
 
         return None
 
-    def on_workspace_configuration(
-        self, params: dict[str, Any], configuration: dict[str, Any] | None
-    ) -> dict[str, Any]:
-        """Handle workspace/configuration requests from the server."""
-        # Initialize configuration if None
-        if configuration is None:
-            configuration = {}
+    def on_workspace_configuration(self, params: Any, configuration: Any) -> Any:
+        """Handle workspace/configuration requests from the server.
+
+        The LSP package calls this method for each ConfigurationItem in the
+        workspace/configuration request. The `params` dict contains:
+          - section: The configuration section requested
+          - scopeUri: Optional URI scope for the configuration
+
+        Roslyn requests configuration sections in these formats:
+          - Per-language: "{lang}|{group}.{option}" e.g. "csharp|code_lens.dotnet_enable_references_code_lens"
+          - Global: "{group}.{option}" e.g. "projects.dotnet_binary_log_path"
+
+        The `configuration` parameter is the pre-resolved value from LSP settings,
+        or None if not found.
+
+        We return None/null for options we don't want to set, allowing Roslyn
+        to use its defaults.
+        """
+        # Log the first configuration request for debugging
+        if not getattr(self, "_did_log_first_config", False):
+            setattr(self, "_did_log_first_config", True)
+            self._debug("workspace/configuration first request - params: {}", params)
+            self._debug("workspace/configuration first request - configuration: {}", configuration)
 
         settings = self.get_settings()
-        nested = settings.get("settings")
-        if not isinstance(nested, dict):
-            nested = {}
+        roslyn_settings = settings.get("roslyn")
+        if not isinstance(roslyn_settings, dict):
+            roslyn_settings = {}
 
-        # Map Sublime settings to Roslyn configuration
-        roslyn_config: dict[str, Any] = {}
+        # Get the section being requested
+        section = params.get("section", "") if isinstance(params, dict) else ""
 
-        # Background analysis settings
-        if "roslyn.backgroundAnalysis" in nested:
-            roslyn_config["csharp|background_analysis"] = nested.get("roslyn.backgroundAnalysis")
+        # Log all unique sections requested (for debugging)
+        if not hasattr(self, "_requested_sections"):
+            self._requested_sections: set[str] = set()
+        if section and section not in self._requested_sections:
+            self._requested_sections.add(section)
+            self._debug("workspace/configuration section requested: {}", section)
 
-        # Code lens settings
-        if "roslyn.codeLens" in nested:
-            roslyn_config["csharp|code_lens"] = nested.get("roslyn.codeLens")
-
-        # Completion settings
-        if "roslyn.completion" in nested:
-            roslyn_config["csharp|completion"] = nested.get("roslyn.completion")
-
-        # Inlay hints settings
-        if "roslyn.inlayHints" in nested:
-            roslyn_config["csharp|inlay_hints"] = nested.get("roslyn.inlayHints")
-
-        # Symbol search settings
-        if "roslyn.symbolSearch" in nested:
-            roslyn_config["csharp|symbol_search"] = nested.get("roslyn.symbolSearch")
-
-        # Formatting settings
-        if "roslyn.formatting" in nested:
-            roslyn_config["csharp|formatting"] = nested.get("roslyn.formatting")
-
-        # Project system settings - explicitly disable binlog generation by default
-        # This prevents .binlog files from being created in project directories
-        binlog_path = nested.get("projects.dotnet_binary_log_path")
-        roslyn_config["projects.dotnet_binary_log_path"] = binlog_path  # null by default
-
-        if not getattr(self, "_did_log_config_keys", False):
-            setattr(self, "_did_log_config_keys", True)
-            self._debug("workspace/configuration settings keys: {}", sorted(list(nested.keys())))
-
-        configuration.update(roslyn_config)
-
-        # `on_ready`/`on_ready_async` are not reliably called across LSP package versions.
-        # `workspace/configuration` is requested after initialization, so it's a safe and
-        # stable signal to open the workspace.
+        # Trigger workspace opening on first configuration request
+        # This is more reliable than on_ready across LSP package versions
         sublime.set_timeout_async(self._open_workspace_if_needed, 0)
 
+        # Extract the base section (without language prefix) and group/option parts
+        # Format: "csharp|group.option" or "group.option"
+        base_section = section
+        language_prefix = None
+        if "|" in section:
+            language_prefix, base_section = section.split("|", 1)
+
+        # Split into group and option name: "code_lens.dotnet_enable_references_code_lens"
+        if "." not in base_section:
+            # No group, just return the original configuration
+            return configuration
+
+        group, option_name = base_section.split(".", 1)
+
+        # Look up the setting value in our roslyn settings
+        # Settings structure: roslyn.{group}.{option_name}
+        # e.g., roslyn.code_lens.dotnet_enable_references_code_lens
+        if group in roslyn_settings:
+            group_settings = roslyn_settings[group]
+            if isinstance(group_settings, dict) and option_name in group_settings:
+                value = group_settings[option_name]
+                self._debug("workspace/configuration returning {} = {}", section, value)
+                return value
+
+        # Return original configuration to let Roslyn use defaults
         return configuration
 
     def on_ready(self, client_config: ClientConfig) -> None:

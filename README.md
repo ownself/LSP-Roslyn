@@ -74,25 +74,32 @@ You can configure settings through `Preferences: LSP-Roslyn Settings` in the Com
 ```json
 {
     "settings": {
-        // Specify default solution if multiple .sln files exist
+        // Plugin settings
         "roslyn.defaultLaunchSolution": "MyProject.sln",
-		// Background analysis
-        "roslyn.backgroundAnalysis": {
-            "dotnet_analyzer_diagnostics_scope": "openFiles",  // or "fullSolution", "none"
+        "roslyn.loggingLevel": "Information",
+        "roslyn.debug": false
+    },
+
+    // Roslyn language server options (sent via workspace/configuration)
+    // Structure: roslyn.{group}.{option_name}
+    "roslyn": {
+        "background_analysis": {
+            "dotnet_analyzer_diagnostics_scope": "openFiles",
             "dotnet_compiler_diagnostics_scope": "openFiles"
         },
-		// Inlay Hints
-        "roslyn.inlayHints": {
+        "inlay_hints": {
             "csharp_enable_inlay_hints_for_implicit_variable_types": true,
             "dotnet_enable_inlay_hints_for_parameters": true
         },
-		// Code Lens
-	    "roslyn.codeLens": {
+        "code_lens": {
             "dotnet_enable_references_code_lens": true,
             "dotnet_enable_tests_code_lens": true
         },
-		// better performance for large solution
-		"roslyn.loadProjectsOnDemand": true,
+        "projects": {
+            // Keep null to disable design-time build binlogs
+            "dotnet_binary_log_path": null,
+            "dotnet_enable_automatic_restore": true
+        }
     }
 }
 ```

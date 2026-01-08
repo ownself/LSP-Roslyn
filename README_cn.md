@@ -74,25 +74,32 @@ git clone https://github.com/ownself/LSP-Roslyn.git
 ```json
 {
     "settings": {
-        // Specify default solution if multiple .sln files exist
+        // 插件自身设置
         "roslyn.defaultLaunchSolution": "MyProject.sln",
-		// Background analysis
-        "roslyn.backgroundAnalysis": {
-            "dotnet_analyzer_diagnostics_scope": "openFiles",  // or "fullSolution", "none"
+        "roslyn.loggingLevel": "Information",
+        "roslyn.debug": false
+    },
+
+    // Roslyn 语言服务器选项（通过 workspace/configuration 下发）
+    // 结构：roslyn.{group}.{option_name}
+    "roslyn": {
+        "background_analysis": {
+            "dotnet_analyzer_diagnostics_scope": "openFiles",
             "dotnet_compiler_diagnostics_scope": "openFiles"
         },
-		// Inlay Hints
-        "roslyn.inlayHints": {
+        "inlay_hints": {
             "csharp_enable_inlay_hints_for_implicit_variable_types": true,
             "dotnet_enable_inlay_hints_for_parameters": true
         },
-		// Code Lens
-	    "roslyn.codeLens": {
+        "code_lens": {
             "dotnet_enable_references_code_lens": true,
             "dotnet_enable_tests_code_lens": true
         },
-		// better performance for large solution
-		"roslyn.loadProjectsOnDemand": true,
+        "projects": {
+            // 保持为 null 可禁用设计时构建 binlog
+            "dotnet_binary_log_path": null,
+            "dotnet_enable_automatic_restore": true
+        }
     }
 }
 ```
