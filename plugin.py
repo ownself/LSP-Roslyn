@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import sublime
+import sublime_plugin
 
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -17,6 +18,7 @@ from LSP.plugin import AbstractPlugin
 from LSP.plugin import ClientConfig
 from LSP.plugin import Notification
 from LSP.plugin import register_plugin
+from LSP.plugin import Request
 from LSP.plugin import unregister_plugin
 from LSP.plugin import WorkspaceFolder
 
@@ -540,15 +542,29 @@ class Roslyn(AbstractPlugin):
         return projects
 
     def _find_unity_main_projects(self, root_path: str) -> list[str]:
-        """Detect Unity project roots and return the primary csproj(s).
+        """Detect Unity project roots and return the solution or primary csproj(s).
 
         Unity projects are typically identified by the presence of Assets/ and ProjectSettings/.
-        When detected, prefer opening `Assembly-CSharp*.csproj` to avoid loading a huge solution.
+        We prefer opening the .sln file (if it exists) because:
+        1. It ensures all project references are correctly resolved
+        2. Dependencies like UnityEngine.UI.csproj are properly loaded
+        3. Roslyn can understand the full project structure
+
+        If no .sln exists, fall back to opening Assembly-CSharp*.csproj files.
         """
         root = Path(root_path)
         if not (root / "Assets").exists() or not (root / "ProjectSettings").exists():
             return []
 
+        # First, look for a .sln file (preferred for correct reference resolution)
+        sln_files = list(root.glob("*.sln"))
+        if sln_files:
+            # Use the first .sln file found (usually there's only one)
+            sln_path = str(sln_files[0])
+            self._debug("Using Unity solution file: {}", sln_path)
+            return [sln_path]
+
+        # Fallback: use individual csproj files
         candidates = []
         for name in ("Assembly-CSharp.csproj", "Assembly-CSharp-Editor.csproj", "Assembly-CSharp.Player.csproj"):
             p = root / name
@@ -581,20 +597,223 @@ class Roslyn(AbstractPlugin):
         print("[LSP-Roslyn] {}".format(message))
 
     # --- Roslyn-specific notification handlers -------------------------------
+    #
+    # Note: Roslyn uses non-standard notification methods. The LSP plugin dispatches
+    # notifications to methods named `m_{method}` where `/` is replaced with `_`.
+    # Examples:
+    #   workspace/projectInitializationComplete -> m_workspace_projectInitializationComplete
+    #   workspace/_roslyn_projectNeedsRestore -> m_workspace__roslyn_projectNeedsRestore
 
-    def m_workspace__projectInitializationComplete(self, params: Any) -> None:
+    def on_server_notification_async(self, notification: Notification) -> None:
+        """Handle server notifications using the new async hook.
+
+        This provides a more reliable way to handle Roslyn-specific notifications.
+        Note: workspace/_roslyn_projectNeedsRestore is a REQUEST, not a notification,
+        so it's handled via m_workspace__roslyn_projectNeedsRestore instead.
+        """
+        method = notification.method
+        params = notification.params
+
+        if method == "workspace/projectInitializationComplete":
+            self._on_project_initialization_complete(params)
+        elif method == "workspace/refreshSourceGeneratedDocument":
+            self._on_refresh_source_generated_document(params)
+
+    def _on_project_initialization_complete(self, params: Any) -> None:
         """Handle workspace/projectInitializationComplete notification."""
+        self._debug("workspace/projectInitializationComplete received")
         self._print(False, "Roslyn project initialization complete")
 
-    def m_workspace__refreshSourceGeneratedDocument(self, params: Any) -> None:
-        """Handle workspace/refreshSourceGeneratedDocument notification."""
-        # TODO: Implement source-generated file refresh
-        pass
+        # Mark that project is initialized
+        setattr(self, "_project_initialized", True)
 
-    def m_workspace___roslyn_projectNeedsRestore(self, params: Any) -> None:
-        """Handle workspace/_roslyn_projectNeedsRestore notification."""
+        # Trigger diagnostic refresh for all open views
+        # Wait for solution/projects to be fully loaded (loading .sln takes longer)
+        sublime.set_timeout_async(self._refresh_all_diagnostics, 3000)
+
+    def _on_project_needs_restore(self, params: Any, request_id: Any = None) -> None:
+        """Handle workspace/_roslyn_projectNeedsRestore request.
+
+        Note: This is actually a REQUEST, not a notification. Roslyn expects a response.
+        """
         self._debug("workspace/_roslyn_projectNeedsRestore: {}", params)
         self._print(True, "Project needs restore - run 'dotnet restore'")
+
+        # If this is a request (has request_id), we need to send a response
+        if request_id is not None:
+            session = self.weaksession()
+            if session:
+                # Send empty response to acknowledge the request
+                from LSP.plugin import Response
+                session.send_response(Response(request_id, None))
+
+    def _on_refresh_source_generated_document(self, params: Any) -> None:
+        """Handle workspace/refreshSourceGeneratedDocument notification."""
+        self._debug("workspace/refreshSourceGeneratedDocument: {}", params)
+        # TODO: Implement source-generated file refresh
+
+    def _refresh_all_diagnostics(self) -> None:
+        """Request diagnostics for all open C# views.
+
+        Since we disabled the LSP plugin's built-in pull diagnostics (which crashes
+        on Roslyn's null responses), we manually request diagnostics and convert
+        them to push format.
+        """
+        session = self.weaksession()
+        if not session:
+            self._debug("No session in _refresh_all_diagnostics")
+            return
+
+        self._debug("Refreshing diagnostics for all open views")
+
+        # Get all open C# views in this window
+        window = session.window
+        for view in window.views():
+            if view.match_selector(0, "source.cs"):
+                file_name = view.file_name()
+                if file_name:
+                    self._request_diagnostics_for_uri(_path_to_uri(file_name))
+
+    def _request_diagnostics_for_uri(self, uri: str) -> None:
+        """Request diagnostics for a specific URI and publish them.
+
+        Sends textDocument/diagnostic request to Roslyn and converts the response
+        to textDocument/publishDiagnostics format for the LSP plugin to display.
+        """
+        session = self.weaksession()
+        if not session:
+            return
+
+        if not getattr(self, "_project_initialized", False):
+            self._debug("Skipping diagnostic request - project not initialized: {}", uri)
+            return
+
+        self._debug("Requesting diagnostics for: {}", uri)
+
+        # Build the diagnostic request
+        request = Request("textDocument/diagnostic", {
+            "textDocument": {"uri": uri}
+        })
+
+        def on_result(response: Any) -> None:
+            if response is None:
+                self._debug("Diagnostic response is None for: {}", uri)
+                return
+
+            # Extract diagnostics from response
+            # Response format: { kind: "full" | "unchanged", items?: Diagnostic[], resultId?: string }
+            kind = response.get("kind", "full") if isinstance(response, dict) else "full"
+            items = response.get("items", []) if isinstance(response, dict) else []
+
+            self._debug("Received {} diagnostics for: {} (kind={})", len(items), uri, kind)
+
+            if kind == "unchanged":
+                # No changes, don't update
+                return
+
+            # Convert to publishDiagnostics format and inject into LSP plugin
+            self._publish_diagnostics(uri, items)
+
+        def on_error(error: Any) -> None:
+            self._debug("Diagnostic request error for {}: {}", uri, error)
+
+        session.send_request_async(request, on_result, on_error)
+
+    def _publish_diagnostics(self, uri: str, diagnostics: list) -> None:
+        """Publish diagnostics using the LSP plugin's push diagnostics handler.
+
+        This converts pull diagnostics to push format so the LSP plugin can display them.
+        """
+        session = self.weaksession()
+        if not session:
+            return
+
+        # Build PublishDiagnosticsParams
+        params = {
+            "uri": uri,
+            "diagnostics": diagnostics
+        }
+
+        self._debug("Publishing {} diagnostics for: {}", len(diagnostics), uri)
+
+        # Call the LSP plugin's push diagnostics handler directly
+        # This is the standard LSP notification handler
+        session.m_textDocument_publishDiagnostics(params)
+
+    # Legacy handlers (kept for compatibility with older LSP plugin versions)
+    def m_workspace_projectInitializationComplete(self, params: Any) -> None:
+        """Legacy handler for workspace/projectInitializationComplete."""
+        self._on_project_initialization_complete(params)
+
+    def m_workspace__roslyn_projectNeedsRestore(self, params: Any, request_id: Any) -> None:
+        """Legacy handler for workspace/_roslyn_projectNeedsRestore (request)."""
+        self._on_project_needs_restore(params, request_id)
+
+
+class RoslynEventListener(sublime_plugin.EventListener):
+    """Event listener for triggering diagnostic refresh on file save and modification."""
+
+    def on_post_save_async(self, view: sublime.View) -> None:
+        """Trigger diagnostic refresh after saving a C# file."""
+        self._request_diagnostics(view)
+
+    def on_modified_async(self, view: sublime.View) -> None:
+        """Trigger diagnostic refresh after modifying a C# file (debounced)."""
+        # Use a debounce to avoid too many requests
+        key = "roslyn_diag_{}".format(view.id())
+        pending = getattr(self, "_pending_diagnostics", {})
+        if key in pending:
+            # Cancel previous pending request
+            pass  # sublime.set_timeout doesn't support cancellation, so we use a flag
+
+        # Store timestamp for this view
+        import time
+        pending[key] = time.time()
+        setattr(self, "_pending_diagnostics", pending)
+
+        # Debounce: wait 1 second after last modification
+        def delayed_request() -> None:
+            current_pending = getattr(self, "_pending_diagnostics", {})
+            if key in current_pending:
+                del current_pending[key]
+                self._request_diagnostics(view)
+
+        sublime.set_timeout_async(delayed_request, 1000)
+
+    def _request_diagnostics(self, view: sublime.View) -> None:
+        """Request diagnostics for a view via the Roslyn plugin."""
+        # Check if this is a C# file
+        if not view.match_selector(0, "source.cs"):
+            return
+
+        file_name = view.file_name()
+        if not file_name:
+            return
+
+        # Try to trigger diagnostic refresh via the plugin
+        try:
+            from LSP.plugin.core.registry import windows
+            from LSP.plugin.core.sessions import get_plugin
+
+            window = view.window()
+            if not window:
+                return
+
+            wm = windows.lookup(window)
+            if not wm:
+                return
+
+            # Find the Roslyn session for this view
+            for session in wm.sessions(view):
+                if session.config.name == "Roslyn":
+                    # Get the plugin instance and request diagnostics
+                    if session._plugin:
+                        uri = _path_to_uri(file_name)
+                        session._plugin._request_diagnostics_for_uri(uri)
+                    break
+        except Exception:
+            # Silently fail if LSP internals change
+            pass
 
 
 def plugin_loaded() -> None:

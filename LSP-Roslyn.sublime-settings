@@ -1,6 +1,13 @@
 {
     "selector": "source.cs | source.cake",
 
+    // Disable LSP plugin's built-in pull diagnostics handling.
+    // Roslyn returns null responses which crash the LSP plugin.
+    // We manually request diagnostics and convert them to push format instead.
+    "disabled_capabilities": {
+        "diagnosticProvider": true
+    },
+
     // Plugin-specific settings (used by LSP-Roslyn itself)
     "settings": {
         "roslyn.defaultLaunchSolution": null,
