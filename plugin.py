@@ -449,18 +449,30 @@ class Roslyn(AbstractPlugin):
         root_path = workspace_folders[0].path
         self._debug("workspace root_path: {}", root_path)
 
+        # Check for Unity project first
         unity_main_projects = self._find_unity_main_projects(root_path)
         if unity_main_projects:
             self._debug("Unity main projects detected: {}", unity_main_projects)
             self._open_projects(unity_main_projects)
             return
 
-        if not self._plugin_setting("roslyn.forceProjectOpen"):
-            solution_file = self._find_solution_file(root_path)
-            if solution_file:
+        # For regular .NET projects, try to use .sln to discover all projects
+        solution_file = self._find_solution_file(root_path)
+        if solution_file:
+            # Parse .sln to get project list, then open as individual .csproj files
+            # This ensures proper project association while loading all dependencies
+            projects_from_sln = self._parse_solution_projects(solution_file)
+            if projects_from_sln:
+                self._debug("Parsed {} projects from solution", len(projects_from_sln))
+                self._open_projects(projects_from_sln)
+                return
+            else:
+                # Fallback: open solution directly if parsing failed
+                self._debug("Could not parse solution, opening directly")
                 self._open_solution(solution_file)
                 return
 
+        # Last resort: find and open individual .csproj files
         project_files = self._find_project_files(root_path)
         self._debug("Found {} csproj(s)", len(project_files))
         if project_files:
@@ -527,6 +539,40 @@ class Roslyn(AbstractPlugin):
         self._debug("Using first solution alphabetically: {}", solutions[0])
         return solutions[0]
 
+    def _parse_solution_projects(self, solution_path: str) -> list[str]:
+        """Parse a .sln file and return all .csproj paths it contains.
+
+        This allows us to discover all projects in a solution and open them
+        via project/open instead of solution/open, which provides better
+        project association and reference resolution.
+        """
+        import re
+        sln_dir = Path(solution_path).parent
+        projects = []
+
+        try:
+            content = Path(solution_path).read_text(encoding="utf-8-sig")
+
+            # Match: Project("{...}") = "ProjectName", "path\to\project.csproj", "{...}"
+            # The pattern captures the relative path to the project file
+            pattern = r'Project\("[^"]*"\)\s*=\s*"[^"]*",\s*"([^"]+\.csproj)"'
+
+            for match in re.finditer(pattern, content, re.IGNORECASE):
+                rel_path = match.group(1)
+                # Convert Windows path separators
+                rel_path = rel_path.replace("\\", "/")
+                # Resolve to absolute path
+                abs_path = (sln_dir / rel_path).resolve()
+                if abs_path.exists():
+                    projects.append(str(abs_path))
+
+            self._debug("Parsed {} projects from {}", len(projects), Path(solution_path).name)
+
+        except Exception as e:
+            self._debug("Error parsing solution {}: {}", solution_path, e)
+
+        return projects
+
     def _find_project_files(self, root_path: str) -> list[str]:
         """Find .csproj files in the workspace."""
         projects: list[str] = []
@@ -545,43 +591,63 @@ class Roslyn(AbstractPlugin):
         """Detect Unity project roots and return the primary csproj(s) and their dependencies.
 
         Unity projects are typically identified by the presence of Assets/ and ProjectSettings/.
-        We open Assembly-CSharp*.csproj files plus common dependencies like UnityEngine.UI.csproj
-        to ensure all references are properly resolved.
+        We open Assembly-CSharp*.csproj files and automatically discover all ProjectReference
+        dependencies to ensure all references are properly resolved.
         """
         root = Path(root_path)
         if not (root / "Assets").exists() or not (root / "ProjectSettings").exists():
             return []
 
-        candidates = []
-
-        # Main project files
+        # Main project files to load
         main_projects = [
             "Assembly-CSharp.csproj",
             "Assembly-CSharp-Editor.csproj",
             "Assembly-CSharp.Player.csproj",
         ]
 
-        # Common Unity package projects that are often referenced
-        dependency_projects = [
-            "UnityEngine.UI.csproj",
-            "UnityEngine.UI.Player.csproj",
-            "Unity.TextMeshPro.csproj",
-            "Unity.TextMeshPro.Player.csproj",
-        ]
+        candidates = []
+        discovered_refs = set()
 
-        # Add main projects first
+        # Add main projects and discover their ProjectReferences
         for name in main_projects:
             p = root / name
             if p.exists():
                 candidates.append(str(p))
+                # Parse ProjectReferences from this csproj
+                refs = self._parse_project_references(p)
+                discovered_refs.update(refs)
 
-        # Add dependency projects
-        for name in dependency_projects:
-            p = root / name
-            if p.exists():
-                candidates.append(str(p))
+        # Add discovered ProjectReferences
+        for ref_name in discovered_refs:
+            ref_path = root / ref_name
+            if ref_path.exists() and str(ref_path) not in candidates:
+                candidates.append(str(ref_path))
+
+        self._debug("Unity projects: {} main + {} dependencies",
+                    len([c for c in candidates if any(m in c for m in main_projects)]),
+                    len(candidates) - len([c for c in candidates if any(m in c for m in main_projects)]))
 
         return candidates
+
+    def _parse_project_references(self, csproj_path: Path) -> set[str]:
+        """Parse ProjectReference elements from a csproj file.
+
+        Returns a set of referenced project file names (e.g., 'UnityEngine.UI.csproj').
+        """
+        refs = set()
+        try:
+            import re
+            content = csproj_path.read_text(encoding="utf-8-sig")
+            # Match: <ProjectReference Include="SomeProject.csproj">
+            pattern = r'<ProjectReference\s+Include="([^"]+)"'
+            for match in re.finditer(pattern, content):
+                ref = match.group(1)
+                # Get just the filename (in case it's a relative path)
+                ref_name = Path(ref).name
+                refs.add(ref_name)
+        except Exception as e:
+            self._debug("Error parsing ProjectReferences from {}: {}", csproj_path, e)
+        return refs
 
     def _print(self, sticky: bool, fmt: str, *args: Any) -> None:
         """Print a message to the status bar."""
