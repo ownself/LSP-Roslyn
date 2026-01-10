@@ -542,31 +542,41 @@ class Roslyn(AbstractPlugin):
         return projects
 
     def _find_unity_main_projects(self, root_path: str) -> list[str]:
-        """Detect Unity project roots and return the solution or primary csproj(s).
+        """Detect Unity project roots and return the primary csproj(s) and their dependencies.
 
         Unity projects are typically identified by the presence of Assets/ and ProjectSettings/.
-        We prefer opening the .sln file (if it exists) because:
-        1. It ensures all project references are correctly resolved
-        2. Dependencies like UnityEngine.UI.csproj are properly loaded
-        3. Roslyn can understand the full project structure
-
-        If no .sln exists, fall back to opening Assembly-CSharp*.csproj files.
+        We open Assembly-CSharp*.csproj files plus common dependencies like UnityEngine.UI.csproj
+        to ensure all references are properly resolved.
         """
         root = Path(root_path)
         if not (root / "Assets").exists() or not (root / "ProjectSettings").exists():
             return []
 
-        # First, look for a .sln file (preferred for correct reference resolution)
-        sln_files = list(root.glob("*.sln"))
-        if sln_files:
-            # Use the first .sln file found (usually there's only one)
-            sln_path = str(sln_files[0])
-            self._debug("Using Unity solution file: {}", sln_path)
-            return [sln_path]
-
-        # Fallback: use individual csproj files
         candidates = []
-        for name in ("Assembly-CSharp.csproj", "Assembly-CSharp-Editor.csproj", "Assembly-CSharp.Player.csproj"):
+
+        # Main project files
+        main_projects = [
+            "Assembly-CSharp.csproj",
+            "Assembly-CSharp-Editor.csproj",
+            "Assembly-CSharp.Player.csproj",
+        ]
+
+        # Common Unity package projects that are often referenced
+        dependency_projects = [
+            "UnityEngine.UI.csproj",
+            "UnityEngine.UI.Player.csproj",
+            "Unity.TextMeshPro.csproj",
+            "Unity.TextMeshPro.Player.csproj",
+        ]
+
+        # Add main projects first
+        for name in main_projects:
+            p = root / name
+            if p.exists():
+                candidates.append(str(p))
+
+        # Add dependency projects
+        for name in dependency_projects:
             p = root / name
             if p.exists():
                 candidates.append(str(p))
@@ -707,6 +717,16 @@ class Roslyn(AbstractPlugin):
 
             self._debug("Received {} diagnostics for: {} (kind={})", len(items), uri, kind)
 
+            # Debug: print diagnostic codes to see what we're getting
+            if items:
+                codes = []
+                for diag in items[:5]:  # First 5 diagnostics
+                    code = diag.get("code", "?")
+                    msg = diag.get("message", "")[:50]
+                    severity = diag.get("severity", "?")
+                    codes.append("{}(sev={}): {}".format(code, severity, msg))
+                self._debug("Sample diagnostics: {}", codes)
+
             if kind == "unchanged":
                 # No changes, don't update
                 return
@@ -758,27 +778,38 @@ class RoslynEventListener(sublime_plugin.EventListener):
         self._request_diagnostics(view)
 
     def on_modified_async(self, view: sublime.View) -> None:
-        """Trigger diagnostic refresh after modifying a C# file (debounced)."""
-        # Use a debounce to avoid too many requests
-        key = "roslyn_diag_{}".format(view.id())
-        pending = getattr(self, "_pending_diagnostics", {})
-        if key in pending:
-            # Cancel previous pending request
-            pass  # sublime.set_timeout doesn't support cancellation, so we use a flag
+        """Trigger diagnostic refresh after modifying a C# file (debounced).
 
-        # Store timestamp for this view
+        We use a debounce to:
+        1. Avoid sending too many requests while typing
+        2. Ensure textDocument/didChange is processed by Roslyn before we request diagnostics
+        """
+        # Check if this is a C# file (early exit for performance)
+        if not view.match_selector(0, "source.cs"):
+            return
+
+        # Use a debounce with version tracking to cancel stale requests
         import time
-        pending[key] = time.time()
+        key = "roslyn_diag_{}".format(view.id())
+        current_time = time.time()
+
+        pending = getattr(self, "_pending_diagnostics", {})
+        pending[key] = current_time
         setattr(self, "_pending_diagnostics", pending)
 
-        # Debounce: wait 1 second after last modification
+        # Debounce: wait 1.5 seconds after last modification
+        # This gives time for:
+        # 1. User to finish typing
+        # 2. LSP plugin to send textDocument/didChange
+        # 3. Roslyn to process the change and update semantic model
         def delayed_request() -> None:
             current_pending = getattr(self, "_pending_diagnostics", {})
-            if key in current_pending:
+            # Only proceed if this is still the latest request for this view
+            if current_pending.get(key) == current_time:
                 del current_pending[key]
                 self._request_diagnostics(view)
 
-        sublime.set_timeout_async(delayed_request, 1000)
+        sublime.set_timeout_async(delayed_request, 1500)
 
     def _request_diagnostics(self, view: sublime.View) -> None:
         """Request diagnostics for a view via the Roslyn plugin."""
